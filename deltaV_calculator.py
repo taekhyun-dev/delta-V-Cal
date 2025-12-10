@@ -11,6 +11,9 @@ MU_EARTH = 3.986004418e14   # m^3/s^2
 R_EARTH = 6371e3            # m
 AU = 1.495978707e11         # m
 
+R_VENUS = 6051.8e3
+MU_VENUS = 3.24859e14
+
 R_EARTH_ORBIT = AU
 R_VENUS_ORBIT = 0.723 * AU
 
@@ -53,6 +56,18 @@ def dv_leo_to_vinf(v_inf, leo_alt_km=300.0):
     v_peri_hyp = math.sqrt(v_inf**2 + v_esc**2)
     dv = v_peri_hyp - v_circ
     return dv, v_circ, v_esc, v_peri_hyp
+
+def dv_venus_capture(v_inf_venus, venus_orbit_alt_km=300.0):
+    r_p = R_VENUS + venus_orbit_alt_km * 1e3
+
+    v_circ = math.sqrt(MU_VENUS / r_p)
+    v_esc = math.sqrt(2.0 * MU_VENUS / r_p)
+
+    v_peri_hyp = math.sqrt(v_inf_venus**2 + v_esc**2)
+
+    dv_capture = v_peri_hyp - v_circ
+    return dv_capture
+
 
 
 def venus_direct_entry_dv_required(leo_alt_km=300.0, margin_m_per_s=300.0):
@@ -143,6 +158,45 @@ def total_dv(cp_mass_kg):
 
     return dv_ks + dv_dsps
 
+def compute_venus_departure_for_earth_return(v_inf_required_at_venus=0.0):
+    # Placeholder: 실제 계산 필요
+    # 예를 들어 1 km/s 정도로 두거나, Hohmann 전이 계산으로 추정
+    return v_inf_required_at_venus  # 추후 값으로 대체
+
+def compute_earth_capture(v_inf_required_at_earth=0.0):
+    # Placeholder: 필요한 지구 측 캡처 ΔV. 1 km/s 등 가정
+    return v_inf_required_at_earth  # 추후 값으로 대체
+
+def venus_orbit_and_return_dv_required(
+    leo_alt_km=300.0,
+    venus_orbit_alt_km=300.0,
+    margin_m_per_s=300.0
+):
+    hv = earth_venus_hohmann()
+
+    # TVI
+    dv_tvi, _, _, _ = dv_leo_to_vinf(hv["v_inf_earth"], leo_alt_km)
+
+    # VOI
+    dv_voi = dv_venus_capture(hv["v_inf_venus"], venus_orbit_alt_km)
+    # dv_voi = dv_voi_data["dv_capture"]
+
+    # 귀환 관련 placeholder
+    dv_return_dep = compute_venus_departure_for_earth_return(1000.0)  # 예: 1 km/s
+    dv_earth_capture = compute_earth_capture(1000.0)  # 예: 1 km/s
+
+    # 합
+    dv_total = dv_tvi + dv_voi + dv_return_dep + dv_earth_capture + margin_m_per_s
+    return {
+        "dv_tvi": dv_tvi,
+        "dv_voi": dv_voi,
+        "dv_return_dep": dv_return_dep,
+        "dv_earth_capture": dv_earth_capture,
+        "dv_margin": margin_m_per_s,
+        "dv_total": dv_total,
+    }
+
+
 
 # ============================
 # 4. Nuri + KS + DSPS + Capsule (KARI scenario)
@@ -152,6 +206,8 @@ def nuri_venus_kari_scenario():
     # ---- Mission / environment ----
     LEO_ALT_KM = 300.0
     DV_MARGIN = 300.0  # m/s, mid-course & targeting margin
+
+    VENUS_LEO_ALT_KM = 300.0
 
     # ---- Nuri LEO capacity ----
     M_NURI_LEO_LIMIT = 3200.0  # kg (3.2 t)
@@ -170,10 +226,18 @@ def nuri_venus_kari_scenario():
     M_CP = 400.0  # baseline from KARI [kg]
 
     # 1) ΔV requirement: TVI + margin (direct atmospheric entry)
-    dv_req = venus_direct_entry_dv_required(
+    # dv_req = venus_direct_entry_dv_required(
+    #     leo_alt_km=LEO_ALT_KM,
+    #     margin_m_per_s=DV_MARGIN
+    # )
+
+    dv_req = venus_orbit_and_return_dv_required(
         leo_alt_km=LEO_ALT_KM,
+        venus_orbit_alt_km=VENUS_LEO_ALT_KM,
         margin_m_per_s=DV_MARGIN
     )
+    dv_total_req = dv_req["dv_total"]
+    print("Required ΔV with orbit + return:", dv_total_req / 1000.0, "km/s")
 
     dv_tvi = dv_req["dv_tvi"]
     dv_total_req = dv_req["dv_total"]
